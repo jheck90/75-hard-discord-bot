@@ -1,0 +1,6 @@
+.git
+.gitignore
+.envrc
+*.md
+vibe-code-resources/
+.DS_Store

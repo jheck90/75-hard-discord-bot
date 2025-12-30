@@ -1,0 +1,45 @@
+# Cursor Rules & Context
+
+## Command Execution Rules
+
+- **Auto-run read commands**: Reading files, listing directories, searching code, checking lints, etc. - execute automatically
+- **Ask before write commands**: Editing files, creating files, writing content - ask for confirmation first
+- **Never auto-run delete/overwrite commands**: Deleting files or overwriting existing files - always ask first
+
+## Project Context
+
+### Technology Stack
+- **Language**: Golang
+- **Database**: PostgreSQL backend
+- **Deployment**: Docker container
+
+### Database Configuration
+- Supports two modes:
+  1. **External Database**: Use provided PostgreSQL connection details (host, port, user, password, database name)
+  2. **Auto-provisioned Database**: If no database connection details are provided, automatically spin up a PostgreSQL instance (likely as a sidecar container or embedded)
+
+### Requirements
+- Must run as a Docker container
+- Should handle database initialization/migration
+- Functions should be modular to support adding features later
+
+### Bot Functionality
+
+#### Daily Check-in System
+- **Default Behavior**: Bot prompts users daily with the question: "Did you complete your 75 hard today?"
+- **User Response**: Users can react with a check emoji (✅) to indicate completion
+- **No Action**: If users do not add the check emoji, take no action (no tracking, no reminders, etc.)
+- **Tracking**: Track which users have completed their daily check-in (stored in PostgreSQL)
+
+#### Slash Commands
+- **Implementation**: Utilize regex-friendly slash commands
+- **Initial Commands**:
+  - `/s` or `/summarize`: Displays a Discord message-friendly chart showing users and how many days they've completed
+  - Chart format should be suitable for Discord message display (consider using code blocks, tables, or formatted text)
+
+### Architecture Notes
+- Discord-first application (web app as a future feature)
+- All data managed by PostgreSQL database, manipulated by the bot
+- Users required to input daily over the course of 75 days
+- Purpose: Accountability on a semi-public forum
+- Users opt-in to challenge and are invited to sub-channel where bot lives and posts reports
