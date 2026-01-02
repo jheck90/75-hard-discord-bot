@@ -1,4 +1,4 @@
-# 75 Hard Discord Bot
+# 75 Half Chub Discord Bot
 
 A vibe-coded Discord bot for managing the 75 Half Chub for Dads challenge with automatic progress tracking.
 - Utilized [cursor-agent](https://cursor.com/docs/cli/overview)
@@ -15,13 +15,13 @@ go run cmd/bot/main.go
 
 ### Docker
 ```bash
-docker build -t 75-hard-bot .
+docker build -t 75-half-chub-bot .
 docker run -d \
   -e DISCORD_BOT_TOKEN="your-token" \
   -e DISCORD_CHANNEL_ID="your-channel-id" \
   -e DB_HOST="your-db-host" \
   -e DB_PASSWORD="your-password" \
-  75-hard-bot
+  75-half-chub-bot
 ```
 
 ### Docker Compose
