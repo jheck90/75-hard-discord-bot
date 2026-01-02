@@ -13,7 +13,7 @@ job "75-half-chub" {
     task "75-half-chub" {
       driver = "docker"
       config {
-        image = "jheck90/75-half-chub-bot:latest"
+        image = "jheck90/75-half-chub-bot:v1.0.0"
 
       }
       template {
