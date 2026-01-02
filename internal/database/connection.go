@@ -264,6 +264,7 @@ func ensureAutoPopulateTrigger(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to recreate trigger: %w", err)
 		}
+		// Note: Logger not available in this package, using fmt for critical messages
 		fmt.Println("✅ Updated auto-populate trigger to fire on INSERT and UPDATE")
 	}
 

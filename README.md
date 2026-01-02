@@ -1,6 +1,7 @@
 # 75 Hard Discord Bot
 
-Discord bot for managing the 75 Half Chub for Dads challenge with automatic progress tracking.
+A vibe-coded Discord bot for managing the 75 Half Chub for Dads challenge with automatic progress tracking.
+- Utilized [cursor-agent](https://cursor.com/docs/cli/overview)
 
 ## Usage
 
@@ -36,6 +37,8 @@ docker-compose up -d
 |----------|----------|---------|-------------|
 | `DISCORD_BOT_TOKEN` | ✅ Yes | - | Discord bot token |
 | `DISCORD_CHANNEL_ID` | ✅ Yes | - | Channel ID where bot operates |
+| `DEV_MODE` | ❌ No | `false` | Set to `dev`, `development`, `true`, or `1` to enable dev mode (shows detailed Discord confirmations and DB entries) |
+| `LOG_LEVEL` | ❌ No | `ERROR` | Logging verbosity: `INFO` (all logs including DB operations) or `ERROR` (errors only) |
 | `DB_HOST` | ❌ No | - | PostgreSQL host (enables database features) |
 | `DB_PORT` | ❌ No | `5432` | PostgreSQL port |
 | `DB_USER` | ❌ No | `postgres` | Database user |

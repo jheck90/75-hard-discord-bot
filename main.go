@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/75-hard-discord-bot/internal/database"
+	"github.com/75-hard-discord-bot/internal/logger"
 )
 
 // Webhook functionality commented out - using bot only
@@ -22,18 +22,23 @@ import (
 var db *sql.DB
 
 func main() {
+	// Initialize logger
+	logLevel := logger.GetLogLevelFromEnv()
+	devMode := logger.GetDevModeFromEnv()
+	logger.Init(logLevel, devMode)
+
 	// Initialize database connection (optional - app can run without DB)
-	log.Println("🔌 Initializing database connection...")
+	logger.Info("🔌 Initializing database connection...")
 	var err error
 	db, err = database.ConnectOrSkip()
 	if err != nil {
-		log.Fatalf("❌ Failed to connect to database: %v", err)
+		logger.Fatal("❌ Failed to connect to database: %v", err)
 	}
 	if db != nil {
-		log.Println("✅ Database connected and migrations applied")
+		logger.Info("✅ Database connected and migrations applied")
 		defer db.Close()
 	} else {
-		log.Println("⚠️  No database configured - database features will be unavailable")
+		logger.Info("⚠️  No database configured - database features will be unavailable")
 	}
 
 	// Webhook functionality commented out - using bot only
@@ -116,18 +121,23 @@ func recordCheckInAndGetDBInfo(userID, username string) (string, error) {
 	}
 
 	// Ensure user exists in database (create if not exists)
+	logger.DB("Ensuring user exists: user_id=%s, username=%s", userID, username)
 	err := ensureUserExists(userID, username)
 	if err != nil {
+		logger.Error("Failed to ensure user exists: %v", err)
 		return "", fmt.Errorf("failed to ensure user exists: %w", err)
 	}
 
 	// Get current challenge day for user
+	logger.DB("Getting current challenge day for user_id=%s", userID)
 	challengeDay, err := getCurrentChallengeDay(userID)
 	if err != nil {
+		logger.Error("Failed to get challenge day: %v", err)
 		return "", fmt.Errorf("failed to get challenge day: %w", err)
 	}
 
 	// Record check-in (this will trigger auto-population of all feat tables)
+	logger.DB("Recording check-in: user_id=%s, challenge_day=%d", userID, challengeDay)
 	result, err := db.Exec(
 		`INSERT INTO accountability_checkins (user_id, challenge_day, check_in_method) 
 		 VALUES ($1, $2, $3) 
@@ -135,21 +145,27 @@ func recordCheckInAndGetDBInfo(userID, username string) (string, error) {
 		userID, challengeDay, "emoji_reaction",
 	)
 	if err != nil {
+		logger.Error("Failed to record check-in: %v", err)
 		return "", fmt.Errorf("failed to record check-in: %w", err)
 	}
 	
 	// Log if this was a new insert (trigger should fire)
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected > 0 {
-		log.Printf("✅ Check-in recorded for user %s, day %d (trigger should fire)", userID, challengeDay)
+		logger.DB("✅ Check-in recorded for user %s, day %d (trigger should fire)", userID, challengeDay)
 	} else {
-		log.Printf("⚠️ Check-in updated for user %s, day %d (trigger may not fire on UPDATE)", userID, challengeDay)
+		logger.DB("⚠️ Check-in updated for user %s, day %d (trigger may not fire on UPDATE)", userID, challengeDay)
 	}
 
-	// Query all feat tables to show what was created
-	dbInfo, err := getDBEntriesInfo(userID, challengeDay)
-	if err != nil {
-		return "", fmt.Errorf("failed to get DB entries info: %w", err)
+	// Query all feat tables to show what was created (only in dev mode)
+	var dbInfo string
+	if logger.IsDevMode() {
+		logger.DB("Querying DB entries info for user_id=%s, challenge_day=%d", userID, challengeDay)
+		dbInfo, err = getDBEntriesInfo(userID, challengeDay)
+		if err != nil {
+			logger.Error("Failed to get DB entries info: %v", err)
+			return "", fmt.Errorf("failed to get DB entries info: %w", err)
+		}
 	}
 
 	return dbInfo, nil
@@ -161,23 +177,29 @@ func ensureUserExists(userID, username string) error {
 	startDate := now.Format("2006-01-02")
 	endDate := now.AddDate(0, 0, 75).Format("2006-01-02")
 
+	logger.DB("Executing INSERT/UPDATE on users table: user_id=%s, username=%s, start_date=%s", userID, username, startDate)
 	_, err := db.Exec(
 		`INSERT INTO users (user_id, username, challenge_start_date, original_challenge_end_date, current_challenge_end_date)
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (user_id) DO UPDATE SET username = EXCLUDED.username`,
 		userID, username, startDate, endDate, endDate,
 	)
+	if err != nil {
+		logger.Error("Failed to ensure user exists: %v", err)
+	}
 	return err
 }
 
 // getCurrentChallengeDay calculates the current challenge day for a user
 func getCurrentChallengeDay(userID string) (int, error) {
+	logger.DB("Querying challenge_start_date for user_id=%s", userID)
 	var startDate time.Time
 	err := db.QueryRow(
 		`SELECT challenge_start_date FROM users WHERE user_id = $1`,
 		userID,
 	).Scan(&startDate)
 	if err != nil {
+		logger.Error("Failed to get challenge start date: %v", err)
 		return 0, err
 	}
 
@@ -185,7 +207,9 @@ func getCurrentChallengeDay(userID string) (int, error) {
 	if daysSinceStart < 0 {
 		daysSinceStart = 0
 	}
-	return daysSinceStart + 1, nil
+	challengeDay := daysSinceStart + 1
+	logger.DB("Calculated challenge_day=%d for user_id=%s", challengeDay, userID)
+	return challengeDay, nil
 }
 
 // getDBEntriesInfo queries all feat tables and returns formatted info
@@ -263,23 +287,24 @@ func getDBEntriesInfo(userID string, challengeDay int) (string, error) {
 func runBot() {
 	botToken := os.Getenv("DISCORD_BOT_TOKEN")
 	if botToken == "" {
-		fmt.Println("Error: DISCORD_BOT_TOKEN environment variable is not set")
-		fmt.Println("To run the bot, you need a Discord bot token.")
-		fmt.Println("Create a bot at https://discord.com/developers/applications")
+		logger.Error("DISCORD_BOT_TOKEN environment variable is not set")
+		logger.Error("To run the bot, you need a Discord bot token.")
+		logger.Error("Create a bot at https://discord.com/developers/applications")
 		os.Exit(1)
 	}
 
 	channelID := os.Getenv("DISCORD_CHANNEL_ID")
 	if channelID == "" {
-		fmt.Println("Error: DISCORD_CHANNEL_ID environment variable is not set")
-		fmt.Println("Please set DISCORD_CHANNEL_ID to the channel where the bot should operate")
+		logger.Error("DISCORD_CHANNEL_ID environment variable is not set")
+		logger.Error("Please set DISCORD_CHANNEL_ID to the channel where the bot should operate")
 		os.Exit(1)
 	}
 
 	// Create a new Discord session
+	logger.Info("Creating Discord session...")
 	dg, err := discordgo.New("Bot " + botToken)
 	if err != nil {
-		fmt.Printf("Error creating Discord session: %v\n", err)
+		logger.Error("Error creating Discord session: %v", err)
 		os.Exit(1)
 	}
 
@@ -317,14 +342,14 @@ func runBot() {
 		// Get user information
 		user, err := s.User(r.UserID)
 		if err != nil {
-			fmt.Printf("Error getting user: %v\n", err)
+			logger.Error("Error getting user: %v", err)
 			return
 		}
 
 		// Get the message to check if it's our check-in message
 		message, err := s.ChannelMessage(r.ChannelID, r.MessageID)
 		if err != nil {
-			fmt.Printf("Error getting message: %v\n", err)
+			logger.Error("Error getting message: %v", err)
 			return
 		}
 
@@ -337,36 +362,50 @@ func runBot() {
 				emojiName = fmt.Sprintf("<:%s:%s>", r.Emoji.Name, r.Emoji.ID)
 			}
 
-			// Build confirmation message
-			confirmation := fmt.Sprintf("✅ **Confirmation**\n"+
-				"**User:** %s\n"+
-				"**Emoji:** %s\n"+
-				"Reaction received!", user.Username, emojiName)
+			// Build confirmation message (only in dev mode)
+			var confirmation string
+			if logger.IsDevMode() {
+				confirmation = fmt.Sprintf("✅ **Confirmation**\n"+
+					"**User:** %s\n"+
+					"**Emoji:** %s\n"+
+					"Reaction received!", user.Username, emojiName)
+			} else {
+				// In production, just acknowledge silently or with minimal message
+				confirmation = "✅ Check-in recorded!"
+			}
 
-			// If database is available and emoji is ✅ (or white_check_mark), record check-in and show DB entries
+			// If database is available and emoji is ✅ (or white_check_mark), record check-in
 			emojiNameLower := strings.ToLower(r.Emoji.Name)
 			isCheckMark := emojiNameLower == "✅" || emojiNameLower == "white_check_mark" || emojiNameLower == "check"
 			if db != nil && isCheckMark {
+				logger.Info("Processing check-in for user: %s (user_id=%s)", user.Username, r.UserID)
 				dbInfo, err := recordCheckInAndGetDBInfo(r.UserID, user.Username)
 				if err != nil {
-					log.Printf("Error recording check-in: %v\n", err)
-					confirmation += "\n\n⚠️ Database recording failed (see logs)"
-				} else {
+					logger.Error("Error recording check-in: %v", err)
+					if logger.IsDevMode() {
+						confirmation += "\n\n⚠️ Database recording failed (see logs)"
+					}
+				} else if logger.IsDevMode() && dbInfo != "" {
+					// Only show DB entries in dev mode
 					confirmation += "\n\n" + dbInfo
 				}
 			}
 
-			_, err = s.ChannelMessageSend(r.ChannelID, confirmation)
-			if err != nil {
-				fmt.Printf("Error sending confirmation: %v\n", err)
+			// Only send confirmation message in dev mode
+			if logger.IsDevMode() {
+				_, err = s.ChannelMessageSend(r.ChannelID, confirmation)
+				if err != nil {
+					logger.Error("Error sending confirmation: %v", err)
+				}
 			}
 		}
 	})
 
 	// Open websocket connection
+	logger.Info("Opening Discord websocket connection...")
 	err = dg.Open()
 	if err != nil {
-		fmt.Printf("Error opening connection: %v\n", err)
+		logger.Error("Error opening connection: %v", err)
 		os.Exit(1)
 	}
 	defer dg.Close()
@@ -404,52 +443,52 @@ func runBot() {
 	}
 
 	// Register commands
+	logger.Info("Registering slash commands...")
 	for _, cmd := range commands {
 		_, err := dg.ApplicationCommandCreate(dg.State.User.ID, "", cmd)
 		if err != nil {
-			log.Printf("Cannot create command '%s': %v", cmd.Name, err)
+			logger.Error("Cannot create command '%s': %v", cmd.Name, err)
 		} else {
-			log.Printf("✅ Registered command: /%s", cmd.Name)
+			logger.Info("✅ Registered command: /%s", cmd.Name)
 		}
 	}
 
-	fmt.Println("75 Hard Discord Bot")
-	fmt.Println("===================")
+	logger.Info("75 Hard Discord Bot")
+	logger.Info("===================")
 	if db != nil {
-		fmt.Println("✅ Database connected - check-ins will be recorded")
+		logger.Info("✅ Database connected - check-ins will be recorded")
 	} else {
-		fmt.Println("⚠️  No database configured - check-ins will not be recorded")
+		logger.Info("⚠️  No database configured - check-ins will not be recorded")
 	}
-	fmt.Println("Bot is now running and listening for commands and reactions...")
-	fmt.Println()
+	logger.Info("Bot is now running and listening for commands and reactions...")
 
 	// Send the check-in message
 	testMessage := "emoji this message to ping"
+	logger.DB("Sending check-in message to channel_id=%s", channelID)
 	msg, err := dg.ChannelMessageSend(channelID, testMessage)
 	if err != nil {
-		fmt.Printf("❌ Error sending check-in message: %v\n", err)
+		logger.Error("❌ Error sending check-in message: %v", err)
 		os.Exit(1)
 	}
 
 	// Add a self-reaction so users can easily click it
 	err = dg.MessageReactionAdd(channelID, msg.ID, "✅")
 	if err != nil {
-		fmt.Printf("⚠️  Warning: Could not add self-reaction: %v\n", err)
-		fmt.Println("   Users can still react manually")
+		logger.Error("⚠️  Warning: Could not add self-reaction: %v", err)
+		logger.Info("   Users can still react manually")
 	}
 
-	fmt.Printf("✅ Check-in message sent to channel %s\n", channelID)
-	fmt.Printf("   Message ID: %s\n", msg.ID)
-	fmt.Println("   Bot has added ✅ reaction - users can click it to check in!")
-	fmt.Println()
-	fmt.Println("Waiting for check-ins... (Press Ctrl+C to stop)")
+	logger.Info("✅ Check-in message sent to channel %s", channelID)
+	logger.Info("   Message ID: %s", msg.ID)
+	logger.Info("   Bot has added ✅ reaction - users can click it to check in!")
+	logger.Info("Waiting for check-ins... (Press Ctrl+C to stop)")
 
 	// Wait for interrupt signal
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 
-	fmt.Println("\nShutting down...")
+	logger.Info("\nShutting down...")
 }
 
 // handleExerciseCommand handles the /exercise slash command
@@ -569,7 +608,7 @@ func handleExerciseCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 			},
 		})
 		if err != nil {
-			log.Printf("Error responding to exercise command: %v", err)
+			logger.Error("Error responding to exercise command: %v", err)
 		}
 	}
 }
@@ -673,6 +712,7 @@ func logExerciseDetailed(userID, username string, workoutDuration int, workoutTy
 	}
 
 	// Insert or update exercise completion (mark as manual entry)
+	logger.DB("Logging exercise: user_id=%s, challenge_day=%d, workout=%dmin, core=%dmin", userID, challengeDay, workoutDuration, coreDuration)
 	_, err = db.Exec(
 		`INSERT INTO exercise_completions 
 		 (user_id, challenge_day, workout_duration_minutes, workout_type, workout_location, core_mobility_duration_minutes, core_mobility_type, autopopulated)
@@ -688,6 +728,11 @@ func logExerciseDetailed(userID, username string, workoutDuration int, workoutTy
 			completed_at = NOW()`,
 		userID, challengeDay, workoutDuration, workoutType, workoutLocation, coreDuration, coreType,
 	)
+	if err != nil {
+		logger.Error("Failed to log exercise: %v", err)
+	} else {
+		logger.DB("Successfully logged exercise for user_id=%s, challenge_day=%d", userID, challengeDay)
+	}
 	return err
 }
 
@@ -764,8 +809,10 @@ func getAllUsersSummary() (string, error) {
 		ORDER BY checkin_days DESC, u.username
 	`
 
+	logger.DB("Querying summary for all users")
 	rows, err := db.Query(query)
 	if err != nil {
+		logger.Error("Failed to query users: %v", err)
 		return "", fmt.Errorf("failed to query users: %w", err)
 	}
 	defer rows.Close()
@@ -831,15 +878,18 @@ func getUserSummary(username string) (string, error) {
 		GROUP BY u.user_id, u.username, u.challenge_start_date, u.current_challenge_end_date, u.days_added
 	`
 
+	logger.DB("Querying summary for user: %s", username)
 	var userID, dbUsername string
 	var startDate, endDate time.Time
 	var daysAdded, checkinDays, exerciseDays, dietDays, waterDays, selfImproveDays, financesDays sql.NullInt64
 
 	err := db.QueryRow(query, username).Scan(&userID, &dbUsername, &startDate, &endDate, &daysAdded, &checkinDays, &exerciseDays, &dietDays, &waterDays, &selfImproveDays, &financesDays)
 	if err == sql.ErrNoRows {
+		logger.DB("User not found: %s", username)
 		return fmt.Sprintf("❌ User '%s' not found.", username), nil
 	}
 	if err != nil {
+		logger.Error("Failed to query user: %v", err)
 		return "", fmt.Errorf("failed to query user: %w", err)
 	}
 
