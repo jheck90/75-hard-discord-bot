@@ -23,7 +23,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DISCORD_WEBHOOK_URL: "your-webhook-url-here"
+      DISCORD_BOT_TOKEN: "your-discord-bot-token-here"
+      DISCORD_CHANNEL_ID: "your-channel-id-here"
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
