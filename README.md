@@ -54,17 +54,8 @@ docker-compose up -d
 
 **Migrations**: Auto-applied on startup. Optional SQL files in `sql/` directory.
 
-## Features & TODOs
+## TODOs
 
-### ✅ Implemented
-- Daily check-in via ✅ emoji reaction (auto-populates all feats)
-- `/exercise quick` - Quick log with defaults
-- `/exercise detailed` - Detailed log via modal form
-- `/summary [user]` - View progress (all users or specific user)
-- Database migrations with checksum validation
-- Idempotent tracking (preserves manual entries)
-
-### 🚧 TODO
 - [ ] `/diet`, `/water`, `/self-improvement`, `/finances` commands
 - [ ] Weekly progress photo reminders
 - [ ] Failure tracking (+7 day penalties)
