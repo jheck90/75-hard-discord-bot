@@ -6,5 +6,3 @@ vibe-code-resources/
 .DS_Store
 # Keep migrations directory - needed at runtime
 !migrations/
-# Keep sql directory for reference (optional)
-!sql/

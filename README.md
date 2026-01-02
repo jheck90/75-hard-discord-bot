@@ -10,7 +10,7 @@ A vibe-coded Discord bot for managing the 75 Half Chub for Dads challenge with a
 export DISCORD_BOT_TOKEN="your-bot-token"
 export DISCORD_CHANNEL_ID="your-channel-id"
 # Optional: export DB_HOST="localhost" DB_PASSWORD="your-password"
-go run main.go
+go run cmd/bot/main.go
 ```
 
 ### Docker
@@ -52,7 +52,7 @@ docker-compose up -d
 
 **Docker Compose**: Use `docker-compose.example.yml` for auto-provisioned PostgreSQL.
 
-**Migrations**: Auto-applied on startup. Optional SQL files in `sql/` directory.
+**Migrations**: Auto-applied on startup. Optional SQL files in `internal/database/sql/` directory.
 
 ## TODOs
 
@@ -65,10 +65,34 @@ docker-compose up -d
 ## Project Structure
 
 ```
-├── main.go                    # Application entry point
-├── Dockerfile                 # Container build config
-├── docker-compose.example.yml # Example compose file
-├── migrations/                # SQL migrations (auto-applied)
-├── sql/                       # Optional SQL files
-└── internal/database/         # Database connection & migrations
+75-hard-discord-bot/
+├── cmd/
+│   └── bot/
+│       └── main.go              # Application entry point
+├── internal/
+│   ├── bot/                     # Bot lifecycle management
+│   │   ├── bot.go              # Bot session creation and lifecycle
+│   │   └── commands.go         # Slash command registration
+│   ├── config/                  # Configuration loading
+│   │   └── config.go           # Environment variable loading
+│   ├── handlers/                # Discord event handlers
+│   │   ├── interactions.go     # Slash command handlers
+│   │   ├── modals.go           # Modal submission handlers
+│   │   └── reactions.go        # Message reaction handlers
+│   ├── services/                # Business logic services
+│   │   ├── services.go         # Service interface & registry
+│   │   ├── user.go             # User management service
+│   │   ├── checkin.go          # Check-in service
+│   │   ├── exercise.go         # Exercise logging service
+│   │   └── summary.go          # Progress summary service
+│   ├── database/                # Database connection & migrations
+│   │   ├── connection.go       # Database connection logic
+│   │   ├── migrations/         # Migration management
+│   │   └── sql/                # Optional SQL files (triggers, views)
+│   └── logger/                  # Logging utilities
+│       └── logger.go
+├── migrations/                  # SQL migration files (auto-applied)
+├── Dockerfile                   # Container build config
+└── docker-compose.example.yml   # Example compose file
 ```
+
