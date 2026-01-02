@@ -85,6 +85,11 @@ func (b *Bot) Start() error {
 	}
 	logger.Info("Bot is now running and listening for commands and reactions...")
 
+	// Send introduction message
+	if err := b.SendIntroduction(b.config.DiscordChannelID); err != nil {
+		return fmt.Errorf("failed to send introduction: %w", err)
+	}
+
 	// Send the check-in message
 	if err := b.SendCheckInMessage(b.config.DiscordChannelID); err != nil {
 		return fmt.Errorf("failed to send check-in message: %w", err)
@@ -99,11 +104,23 @@ func (b *Bot) Stop() error {
 	return b.session.Close()
 }
 
-// SendCheckInMessage sends the initial check-in message to the channel
+// SendIntroduction sends a one-sentence introduction message to the channel
+func (b *Bot) SendIntroduction(channelID string) error {
+	introMessage := "👋 75 Half Chub Bot here! I'll help you track your daily challenge progress."
+	logger.Info("Sending introduction message to channel_id=%s", channelID)
+	_, err := b.session.ChannelMessageSend(channelID, introMessage)
+	if err != nil {
+		return fmt.Errorf("error sending introduction: %w", err)
+	}
+	logger.Info("✅ Introduction message sent")
+	return nil
+}
+
+// SendCheckInMessage sends the daily check-in message to the channel
 func (b *Bot) SendCheckInMessage(channelID string) error {
-	testMessage := "emoji this message to ping"
+	checkInMessage := "Check this message to confirm you completed the challenges today"
 	logger.DB("Sending check-in message to channel_id=%s", channelID)
-	msg, err := b.session.ChannelMessageSend(channelID, testMessage)
+	msg, err := b.session.ChannelMessageSend(channelID, checkInMessage)
 	if err != nil {
 		return fmt.Errorf("error sending check-in message: %w", err)
 	}
@@ -118,7 +135,6 @@ func (b *Bot) SendCheckInMessage(channelID string) error {
 	logger.Info("✅ Check-in message sent to channel %s", channelID)
 	logger.Info("   Message ID: %s", msg.ID)
 	logger.Info("   Bot has added ✅ reaction - users can click it to check in!")
-	logger.Info("Waiting for check-ins... (Press Ctrl+C to stop)")
 
 	return nil
 }

@@ -44,7 +44,7 @@ func (h *ReactionHandler) HandleMessageReaction(s *discordgo.Session, r *discord
 
 	// Check if this is our check-in message
 	if message.Author.ID == s.State.User.ID &&
-		message.Content == "emoji this message to ping" {
+		message.Content == "Check this message to confirm you completed the challenges today" {
 		// Format emoji name
 		emojiName := r.Emoji.Name
 		if r.Emoji.ID != "" {
