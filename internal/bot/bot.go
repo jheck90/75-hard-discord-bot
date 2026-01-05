@@ -57,6 +57,8 @@ func (b *Bot) Start() error {
 	b.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.Type == discordgo.InteractionModalSubmit {
 			modalHandler.HandleModalSubmit(s, i)
+		} else if i.Type == discordgo.InteractionMessageComponent {
+			interactionHandler.HandleButtonClick(s, i)
 		}
 	})
 

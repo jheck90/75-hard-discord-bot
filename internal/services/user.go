@@ -60,6 +60,37 @@ func (s *UserService) EnsureUserExists(userID, username string) error {
 	return err
 }
 
+// StartChallenge starts or updates a user's challenge with a specific start date
+func (s *UserService) StartChallenge(userID, username string, startDate time.Time) (time.Time, time.Time, error) {
+	if s.db == nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("database not available")
+	}
+
+	endDate := startDate.AddDate(0, 0, 75)
+	startDateStr := startDate.Format("2006-01-02")
+	endDateStr := endDate.Format("2006-01-02")
+
+	logger.DB("Starting challenge: user_id=%s, username=%s, start_date=%s", userID, username, startDateStr)
+	_, err := s.db.Exec(
+		`INSERT INTO users (user_id, username, challenge_start_date, original_challenge_end_date, current_challenge_end_date)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (user_id) DO UPDATE SET 
+			username = EXCLUDED.username,
+			challenge_start_date = EXCLUDED.challenge_start_date,
+			original_challenge_end_date = EXCLUDED.original_challenge_end_date,
+			current_challenge_end_date = EXCLUDED.current_challenge_end_date,
+			days_added = 0`,
+		userID, username, startDateStr, endDateStr, endDateStr,
+	)
+	if err != nil {
+		logger.Error("Failed to start challenge: %v", err)
+		return time.Time{}, time.Time{}, fmt.Errorf("failed to start challenge: %w", err)
+	}
+
+	logger.DB("Successfully started challenge for user_id=%s, start_date=%s, end_date=%s", userID, startDateStr, endDateStr)
+	return startDate, endDate, nil
+}
+
 // GetCurrentChallengeDay calculates the current challenge day for a user
 func (s *UserService) GetCurrentChallengeDay(userID string) (int, error) {
 	if s.db == nil {

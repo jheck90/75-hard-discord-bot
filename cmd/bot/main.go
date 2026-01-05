@@ -61,6 +61,12 @@ func main() {
 	exerciseService := services.NewExerciseService(userService)
 	serviceRegistry.Register(exerciseService)
 
+	weighInService := services.NewWeighInService(userService)
+	serviceRegistry.Register(weighInService)
+
+	waterService := services.NewWaterService(userService)
+	serviceRegistry.Register(waterService)
+
 	summaryService := services.NewSummaryService()
 	serviceRegistry.Register(summaryService)
 

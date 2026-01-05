@@ -36,6 +36,65 @@ func RegisterCommands(session *discordgo.Session) error {
 				},
 			},
 		},
+		{
+			Name:        "weighin",
+			Description: "Record your daily weigh-in",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionNumber,
+					Name:        "weight",
+					Description: "Your weight in pounds",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "notes",
+					Description: "Optional notes about your weigh-in",
+					Required:    false,
+					MaxLength:   500,
+				},
+			},
+		},
+		{
+			Name:        "start",
+			Description: "Start your 75 Hard challenge",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "date",
+					Description: "Start date (YYYY-MM-DD) - defaults to today (MST)",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "water",
+			Description: "Track your daily water intake",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionNumber,
+					Name:        "ounces",
+					Description: "Amount of water in ounces",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "action",
+					Description: "Add or subtract water (default: add)",
+					Required:    false,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "add",
+							Value: "add",
+						},
+						{
+							Name:  "subtract",
+							Value: "subtract",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	// Register commands

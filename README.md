@@ -56,11 +56,15 @@ docker-compose up -d
 
 ## TODOs
 
-- [ ] `/diet`, `/water`, `/self-improvement`, `/finances` commands
+- [ ] `/diet`, `/self-improvement` commands
 - [ ] Weekly progress photo reminders
 - [ ] Failure tracking (+7 day penalties)
 - [ ] Council exception system
-- [ ] Custom 75 day start dates/tracking
+- [x] Custom 75 day start dates/tracking
+- [ ] User progress reset
+- [x] Weigh-in
+- [x] Water tracking
+- [ ] LLM support ie `/exercise llm - Cycled on the stationary spinbike for 30 minutes today, followed by push-ups for ten minutes`
 
 ## Project Structure
 
@@ -84,6 +88,8 @@ docker-compose up -d
 │   │   ├── user.go             # User management service
 │   │   ├── checkin.go          # Check-in service
 │   │   ├── exercise.go         # Exercise logging service
+│   │   ├── weighin.go          # Weigh-in tracking service
+│   │   ├── water.go            # Water intake tracking service
 │   │   └── summary.go          # Progress summary service
 │   ├── database/                # Database connection & migrations
 │   │   ├── connection.go       # Database connection logic
