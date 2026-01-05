@@ -61,10 +61,11 @@ docker-compose up -d
 - [ ] Failure tracking (+7 day penalties)
 - [ ] Council exception system
 - [x] Custom 75 day start dates/tracking
-- [ ] User progress reset
+- [x] User progress reset (handled with `/start`)
 - [x] Weigh-in
 - [x] Water tracking
 - [ ] LLM support ie `/exercise llm - Cycled on the stationary spinbike for 30 minutes today, followed by push-ups for ten minutes`
+- [ ] Implement a release tool
 
 ## Project Structure
 

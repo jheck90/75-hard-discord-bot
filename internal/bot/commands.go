@@ -72,24 +72,33 @@ func RegisterCommands(session *discordgo.Session) error {
 			Description: "Track your daily water intake",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionNumber,
-					Name:        "ounces",
-					Description: "Amount of water in ounces",
-					Required:    true,
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "summary",
+					Description: "View today's total water intake",
 				},
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "action",
-					Description: "Add or subtract water (default: add)",
-					Required:    false,
-					Choices: []*discordgo.ApplicationCommandOptionChoice{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "add",
+					Description: "Add water to today's total",
+					Options: []*discordgo.ApplicationCommandOption{
 						{
-							Name:  "add",
-							Value: "add",
+							Type:        discordgo.ApplicationCommandOptionNumber,
+							Name:        "ounces",
+							Description: "Amount of water in ounces to add",
+							Required:    true,
 						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "subtract",
+					Description: "Subtract water from today's total",
+					Options: []*discordgo.ApplicationCommandOption{
 						{
-							Name:  "subtract",
-							Value: "subtract",
+							Type:        discordgo.ApplicationCommandOptionNumber,
+							Name:        "ounces",
+							Description: "Amount of water in ounces to subtract",
+							Required:    true,
 						},
 					},
 				},

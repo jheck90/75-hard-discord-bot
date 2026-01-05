@@ -52,6 +52,7 @@ func (s *SummaryService) GetAllUsersSummary() (string, error) {
 		return "", fmt.Errorf("database not available")
 	}
 
+	// Count distinct challenge days completed (using check-ins as the source of truth)
 	query := `
 		SELECT 
 			u.user_id,
@@ -59,21 +60,11 @@ func (s *SummaryService) GetAllUsersSummary() (string, error) {
 			u.challenge_start_date,
 			u.current_challenge_end_date,
 			u.days_added,
-			COUNT(DISTINCT a.challenge_day) as checkin_days,
-			COUNT(DISTINCT e.challenge_day) as exercise_days,
-			COUNT(DISTINCT d.challenge_day) as diet_days,
-			COUNT(DISTINCT w.challenge_day) as water_days,
-			COUNT(DISTINCT si.challenge_day) as self_improvement_days,
-			COUNT(DISTINCT CASE WHEN f.compliance_status = 'compliant' THEN f.challenge_day END) as finances_days
+			COUNT(DISTINCT CASE WHEN a.challenge_day >= 1 AND a.challenge_day <= GREATEST(1, (CURRENT_DATE::date - u.challenge_start_date::date) + 1) THEN a.challenge_day END) as days_completed
 		FROM users u
 		LEFT JOIN accountability_checkins a ON a.user_id = u.user_id
-		LEFT JOIN exercise_completions e ON e.user_id = u.user_id
-		LEFT JOIN diet_completions d ON d.user_id = u.user_id
-		LEFT JOIN water_completions w ON w.user_id = u.user_id
-		LEFT JOIN self_improvement_completions si ON si.user_id = u.user_id
-		LEFT JOIN finances_completions f ON f.user_id = u.user_id
 		GROUP BY u.user_id, u.username, u.challenge_start_date, u.current_challenge_end_date, u.days_added
-		ORDER BY checkin_days DESC, u.username
+		ORDER BY days_completed DESC, u.username
 	`
 
 	logger.DB("Querying summary for all users")
@@ -90,9 +81,10 @@ func (s *SummaryService) GetAllUsersSummary() (string, error) {
 	for rows.Next() {
 		var userID, username string
 		var startDate, endDate time.Time
-		var daysAdded, checkinDays, exerciseDays, dietDays, waterDays, selfImproveDays, financesDays sql.NullInt64
+		var daysAdded int
+		var daysCompleted sql.NullInt64
 
-		err := rows.Scan(&userID, &username, &startDate, &endDate, &daysAdded, &checkinDays, &exerciseDays, &dietDays, &waterDays, &selfImproveDays, &financesDays)
+		err := rows.Scan(&userID, &username, &startDate, &endDate, &daysAdded, &daysCompleted)
 		if err != nil {
 			return "", fmt.Errorf("failed to scan user row: %w", err)
 		}
@@ -104,12 +96,11 @@ func (s *SummaryService) GetAllUsersSummary() (string, error) {
 		}
 
 		summary.WriteString(fmt.Sprintf("**%s** (Day %d/%d", username, currentDay, totalDays))
-		if daysAdded.Int64 > 0 {
-			summary.WriteString(fmt.Sprintf(" +%d", daysAdded.Int64))
+		if daysAdded > 0 {
+			summary.WriteString(fmt.Sprintf(" +%d", daysAdded))
 		}
 		summary.WriteString(")\n")
-		summary.WriteString(fmt.Sprintf("  ✅ Check-ins: %d | 💪 Exercise: %d | 🍽️ Diet: %d | 💧 Water: %d | 📚 Self-Improve: %d | 💰 Finances: %d\n\n",
-			checkinDays.Int64, exerciseDays.Int64, dietDays.Int64, waterDays.Int64, selfImproveDays.Int64, financesDays.Int64))
+		summary.WriteString(fmt.Sprintf("  ✅ Days Completed: %d\n\n", daysCompleted.Int64))
 	}
 
 	if summary.Len() == len("📊 **Challenge Progress Summary (All Users)**\n\n") {
@@ -132,19 +123,9 @@ func (s *SummaryService) GetUserSummary(username string) (string, error) {
 			u.challenge_start_date,
 			u.current_challenge_end_date,
 			u.days_added,
-			COUNT(DISTINCT a.challenge_day) as checkin_days,
-			COUNT(DISTINCT e.challenge_day) as exercise_days,
-			COUNT(DISTINCT d.challenge_day) as diet_days,
-			COUNT(DISTINCT w.challenge_day) as water_days,
-			COUNT(DISTINCT si.challenge_day) as self_improvement_days,
-			COUNT(DISTINCT CASE WHEN f.compliance_status = 'compliant' THEN f.challenge_day END) as finances_days
+			COUNT(DISTINCT CASE WHEN a.challenge_day >= 1 AND a.challenge_day <= GREATEST(1, (CURRENT_DATE::date - u.challenge_start_date::date) + 1) THEN a.challenge_day END) as days_completed
 		FROM users u
 		LEFT JOIN accountability_checkins a ON a.user_id = u.user_id
-		LEFT JOIN exercise_completions e ON e.user_id = u.user_id
-		LEFT JOIN diet_completions d ON d.user_id = u.user_id
-		LEFT JOIN water_completions w ON w.user_id = u.user_id
-		LEFT JOIN self_improvement_completions si ON si.user_id = u.user_id
-		LEFT JOIN finances_completions f ON f.user_id = u.user_id
 		WHERE LOWER(u.username) = LOWER($1)
 		GROUP BY u.user_id, u.username, u.challenge_start_date, u.current_challenge_end_date, u.days_added
 	`
@@ -152,9 +133,10 @@ func (s *SummaryService) GetUserSummary(username string) (string, error) {
 	logger.DB("Querying summary for user: %s", username)
 	var userID, dbUsername string
 	var startDate, endDate time.Time
-	var daysAdded, checkinDays, exerciseDays, dietDays, waterDays, selfImproveDays, financesDays sql.NullInt64
+	var daysAdded int
+	var daysCompleted sql.NullInt64
 
-	err := s.db.QueryRow(query, username).Scan(&userID, &dbUsername, &startDate, &endDate, &daysAdded, &checkinDays, &exerciseDays, &dietDays, &waterDays, &selfImproveDays, &financesDays)
+	err := s.db.QueryRow(query, username).Scan(&userID, &dbUsername, &startDate, &endDate, &daysAdded, &daysCompleted)
 	if err == sql.ErrNoRows {
 		logger.DB("User not found: %s", username)
 		return fmt.Sprintf("❌ User '%s' not found.", username), nil
@@ -173,37 +155,16 @@ func (s *SummaryService) GetUserSummary(username string) (string, error) {
 	var summary strings.Builder
 	summary.WriteString(fmt.Sprintf("📊 **Challenge Progress Summary: %s**\n\n", dbUsername))
 	summary.WriteString(fmt.Sprintf("**Challenge:** Day %d/%d", currentDay, totalDays))
-	if daysAdded.Int64 > 0 {
-		summary.WriteString(fmt.Sprintf(" (+%d days added)", daysAdded.Int64))
+	if daysAdded > 0 {
+		summary.WriteString(fmt.Sprintf(" (+%d days added)", daysAdded))
 	}
 	summary.WriteString(fmt.Sprintf("\n**Started:** %s\n\n", startDate.Format("January 2, 2006")))
 
-	summary.WriteString("**Feat Completions:**\n")
-	summary.WriteString(fmt.Sprintf("  ✅ Accountability Check-ins: %d days\n", checkinDays.Int64))
-	summary.WriteString(fmt.Sprintf("  💪 Exercise: %d days\n", exerciseDays.Int64))
-	summary.WriteString(fmt.Sprintf("  🍽️  Diet: %d days\n", dietDays.Int64))
-	summary.WriteString(fmt.Sprintf("  💧 Water: %d days\n", waterDays.Int64))
-	summary.WriteString(fmt.Sprintf("  📚 Self-Improvement: %d days\n", selfImproveDays.Int64))
-	summary.WriteString(fmt.Sprintf("  💰 Finances: %d days\n", financesDays.Int64))
+	summary.WriteString(fmt.Sprintf("**Days Completed:** %d\n", daysCompleted.Int64))
 
 	// Calculate completion percentage
-	allFeatsCompleted := min(checkinDays.Int64, exerciseDays.Int64, dietDays.Int64, waterDays.Int64, selfImproveDays.Int64, financesDays.Int64)
-	completionRate := float64(allFeatsCompleted) / float64(totalDays) * 100
-	summary.WriteString(fmt.Sprintf("\n**Overall Progress:** %.1f%% (%d/%d days with all feats completed)", completionRate, allFeatsCompleted, totalDays))
+	completionRate := float64(daysCompleted.Int64) / float64(totalDays) * 100
+	summary.WriteString(fmt.Sprintf("\n**Progress:** %.1f%% (%d/%d days)", completionRate, daysCompleted.Int64, totalDays))
 
 	return summary.String(), nil
-}
-
-// min returns the minimum of multiple int64 values
-func min(values ...int64) int64 {
-	if len(values) == 0 {
-		return 0
-	}
-	minVal := values[0]
-	for _, v := range values[1:] {
-		if v < minVal {
-			minVal = v
-		}
-	}
-	return minVal
 }

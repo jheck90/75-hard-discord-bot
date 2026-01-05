@@ -42,9 +42,12 @@ func (h *ReactionHandler) HandleMessageReaction(s *discordgo.Session, r *discord
 		return
 	}
 
-	// Check if this is our check-in message
-	if message.Author.ID == s.State.User.ID &&
-		message.Content == "Check this message to confirm you completed the challenges today" {
+	// Check if this is our check-in message (datestamped format)
+	isCheckInMessage := message.Author.ID == s.State.User.ID &&
+		strings.Contains(message.Content, "Daily Check-In") &&
+		strings.Contains(message.Content, "Check this message to confirm you completed the challenges today")
+
+	if isCheckInMessage {
 		// Format emoji name
 		emojiName := r.Emoji.Name
 		if r.Emoji.ID != "" {

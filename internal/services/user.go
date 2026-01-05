@@ -116,3 +116,92 @@ func (s *UserService) GetCurrentChallengeDay(userID string) (int, error) {
 	logger.DB("Calculated challenge_day=%d for user_id=%s", challengeDay, userID)
 	return challengeDay, nil
 }
+
+// ActiveUser represents a user currently participating in the challenge
+type ActiveUser struct {
+	UserID      string
+	Username    string
+	StartDate   time.Time
+	EndDate     time.Time
+	CurrentDay  int
+	TotalDays   int
+	DaysAdded   int
+}
+
+// GetActiveUsers returns all users currently participating in the challenge
+func (s *UserService) GetActiveUsers() ([]ActiveUser, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+
+	// Load MST location for consistent date handling
+	mst, err := time.LoadLocation("America/Denver")
+	if err != nil {
+		mst = time.FixedZone("MST", -7*3600)
+	}
+
+	// Get today's date in MST (normalized to midnight)
+	nowMST := time.Now().In(mst)
+	todayMST := time.Date(nowMST.Year(), nowMST.Month(), nowMST.Day(), 0, 0, 0, 0, mst)
+	
+	// Use date-only comparison (cast to date in SQL)
+	query := `
+		SELECT 
+			user_id,
+			username,
+			challenge_start_date,
+			current_challenge_end_date,
+			days_added
+		FROM users
+		WHERE challenge_start_date::date <= $1::date
+		  AND current_challenge_end_date::date >= $1::date
+		ORDER BY challenge_start_date ASC, username ASC
+	`
+
+	rows, err := s.db.Query(query, todayMST)
+	if err != nil {
+		logger.Error("Failed to query active users: %v", err)
+		return nil, fmt.Errorf("failed to query active users: %w", err)
+	}
+	defer rows.Close()
+
+	var activeUsers []ActiveUser
+	for rows.Next() {
+		var userID, username string
+		var startDate, endDate time.Time
+		var daysAdded int
+
+		err := rows.Scan(&userID, &username, &startDate, &endDate, &daysAdded)
+		if err != nil {
+			logger.Error("Failed to scan active user row: %v", err)
+			continue
+		}
+
+		// Normalize dates to MST midnight for accurate day calculations
+		startDateMST := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, mst)
+		endDateMST := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 0, 0, 0, 0, mst)
+
+		// Calculate days since start using MST dates
+		daysSinceStart := int(todayMST.Sub(startDateMST).Hours() / 24)
+		if daysSinceStart < 0 {
+			daysSinceStart = 0
+		}
+		currentDay := daysSinceStart + 1
+		totalDays := int(endDateMST.Sub(startDateMST).Hours() / 24)
+		if currentDay > totalDays {
+			currentDay = totalDays
+		}
+
+		activeUsers = append(activeUsers, ActiveUser{
+			UserID:     userID,
+			Username:   username,
+			StartDate:  startDateMST,
+			EndDate:    endDateMST,
+			CurrentDay: currentDay,
+			TotalDays:  totalDays,
+			DaysAdded:  daysAdded,
+		})
+	}
+
+	return activeUsers, nil
+}

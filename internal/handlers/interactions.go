@@ -472,15 +472,47 @@ func (h *InteractionHandler) handleWaterCommand(s *discordgo.Session, i *discord
 		return
 	}
 
-	// Get ounces and action from options
+	// Get subcommand
+	subcommand := i.ApplicationCommandData().Options[0].Name
+
+	if subcommand == "summary" {
+		// Show today's total
+		currentTotal, err := waterService.GetWaterIntake(userID)
+		if err != nil {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("❌ Error getting water intake: %v", err),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+
+		responseText := fmt.Sprintf("💧 **Today's Water Intake**\n**Total:** %.2f / 128 oz", currentTotal)
+		if currentTotal >= 128.0 {
+			responseText += "\n\n🎉 **Goal reached!** You've hit 1 gallon (128 oz)!"
+		} else {
+			remaining := 128.0 - currentTotal
+			responseText += fmt.Sprintf("\n📊 **Remaining:** %.2f oz to reach 1 gallon", remaining)
+		}
+
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: responseText,
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	// Get ounces from subcommand options
 	var ounces float64
-	action := "add"
-	for _, option := range i.ApplicationCommandData().Options {
-		switch option.Name {
-		case "ounces":
+	for _, option := range i.ApplicationCommandData().Options[0].Options {
+		if option.Name == "ounces" {
 			ounces = option.FloatValue()
-		case "action":
-			action = option.StringValue()
+			break
 		}
 	}
 
@@ -500,7 +532,7 @@ func (h *InteractionHandler) handleWaterCommand(s *discordgo.Session, i *discord
 	var err error
 	var actualAmount, newTotal float64
 
-	if action == "subtract" {
+	if subcommand == "subtract" {
 		actualAmount, newTotal, err = waterService.SubtractWater(userID, username, ounces)
 		if err != nil {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -513,7 +545,7 @@ func (h *InteractionHandler) handleWaterCommand(s *discordgo.Session, i *discord
 			return
 		}
 		responseText = fmt.Sprintf("💧 **Water subtracted!**\n**Subtracted:** %.2f oz\n**Total today:** %.2f / 128 oz", actualAmount, newTotal)
-	} else {
+	} else if subcommand == "add" {
 		actualAmount, newTotal, err = waterService.AddWater(userID, username, ounces)
 		if err != nil {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
